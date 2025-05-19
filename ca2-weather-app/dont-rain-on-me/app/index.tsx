@@ -7,7 +7,7 @@ const HomeScreen = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Don't Rain on Me ☀️</Text>
       <Text style={styles.subtitle}>Your personal weather assistant, anywhere you go.</Text>
-      <Link href="/search">
+      <Link href="/weather-app">
         <Button title="🌐 Search for a City" />
       </Link>
     </View>
