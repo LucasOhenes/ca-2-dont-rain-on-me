@@ -20,6 +20,7 @@ export default function WeatherApp() {
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [noResults, setNoResults] = useState(false);
+  const [isCelsius, setIsCelsius] = useState(true); // creating element to toggle celsius/farhenheit 
 
   const [currentWeather, setCurrentWeather] = useState({
     temperature: null,
@@ -82,6 +83,15 @@ export default function WeatherApp() {
     };
     return conditions[weatherCode] || 'Unknown';
   };
+
+
+  //Function to format temperature according to measurement unit
+  const formatTemperature = (tempCelsius) => {
+    if(tempCelsius === null || tempCelsius === '--') return '--°';
+    return isCelsius 
+    ? `${tempCelsius}°C`
+    : `${Math.round((tempCelsius * 9) / 5 + 32)}°F` // if temperature is in celcius, return it, if not, use conversion expression to  convert it to fahrenheit and return that. 
+  }
 
   // Geocoding function to get coordinates from location name
   const geocodeLocation = async (locationName) => {
@@ -247,7 +257,7 @@ const handleSuggestionSelect = (item) => {
         color="#ffffff" 
         style={styles.hourlyIcon}
       />
-      <Text style={styles.hourlyTemp}>{item.temp}°</Text>
+      <Text style={styles.hourlyTemp}>{formatTemperature(item.temp)}</Text>
     </View>
   );
 
@@ -265,8 +275,8 @@ const handleSuggestionSelect = (item) => {
         </View>
       </View>
       <View style={styles.forecastTemps}>
-        <Text style={styles.forecastHigh}>{item.high}°</Text>
-        <Text style={styles.forecastLow}>{item.low}°</Text>
+        <Text style={styles.forecastHigh}>{formatTemperature(item.high)}</Text>
+        <Text style={styles.forecastLow}>{formatTemperature(item.low)}</Text>
       </View>
     </View>
   );
@@ -344,14 +354,29 @@ const handleSuggestionSelect = (item) => {
               style={styles.mainWeatherIcon} 
             />
             <Text style={styles.currentTemp}>
-              {loading ? 'Loading...' : 
-               currentWeather.temperature ? `${currentWeather.temperature}°` : '--°'}
+              {loading ? 'Loading...' : formatTemperature(currentWeather.temperature)}
             </Text>
             <Text style={styles.currentCondition}>{currentWeather.condition}</Text>
             <Text style={styles.feelsLike}>
-              {currentWeather.feelsLike ? `Feels like ${currentWeather.feelsLike}°` : 'Feels like --°'}
+              {currentWeather.feelsLike ? `Feels like ${formatTemperature(currentWeather.feelsLike)}°` : 'Feels like --°'}
             </Text>
           </View>
+
+          {/* celcius/farhenheit toggle button*/}
+          <View style={styles.unitToggleContainer}>
+          <TouchableOpacity 
+          style={[styles.unitButton, isCelsius && styles.unitButtonActive]} 
+          onPress={() => setIsCelsius(true)}
+          >
+          <Text style={styles.unitText}>°C</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+          style={[styles.unitButton, !isCelsius && styles.unitButtonActive]} 
+          onPress={() => setIsCelsius(false)}
+          >
+        <Text style={styles.unitText}>°F</Text>
+  </TouchableOpacity>
+</View>
 
           {/* Weather Details */}
           <View style={styles.detailsContainer}>
@@ -386,6 +411,8 @@ const handleSuggestionSelect = (item) => {
               />
             </View>
           </View>
+
+          
 
           {/* 5-Day Forecast */}
           <View style={styles.sectionContainer}>
@@ -610,6 +637,27 @@ noResultText: {
   paddingHorizontal: 20,
   marginTop: 5,
   marginBottom: 10,
+},
+unitToggleContainer: {
+  flexDirection: 'row',
+  justifyContent: 'center',
+  marginBottom: 15,
+  marginTop: -10,
+},
+unitButton: {
+  paddingVertical: 6,
+  paddingHorizontal: 16,
+  borderRadius: 20,
+  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  marginHorizontal: 5,
+},
+unitButtonActive: {
+  backgroundColor: '#ffffff',
+},
+unitText: {
+  fontSize: 14,
+  color: '#ADD8E6',
+  fontWeight: '600',
 },
 
 });
