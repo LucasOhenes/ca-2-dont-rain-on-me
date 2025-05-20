@@ -14,10 +14,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 
 export default function WeatherApp() {
-  const [location, setLocation] = useState('Dublin, Ireland');
+  const [location, setLocation] = useState('Dublin, Leinster, Ireland');
   const [coordinates, setCoordinates] = useState({ lat: 53.33306, lon:  -6.24889});
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [noResults, setNoResults] = useState(false);
+
   const [currentWeather, setCurrentWeather] = useState({
     temperature: null,
     condition: 'Loading...',
@@ -93,7 +96,7 @@ export default function WeatherApp() {
         return {
           lat: result.latitude,
           lon: result.longitude,
-          name: `${result.name}, ${result.country}`
+          name: `${result.name}${result.admin1 ?`,${result.admin1}`: ''}, ${result.country}`
         };
       }
       throw new Error('Location not found');
@@ -170,6 +173,44 @@ export default function WeatherApp() {
       setLoading(false);
     }
   };
+const fetchCitySuggestions = async (query) => {
+  if (!query.trim()) {
+    setSuggestions([]);
+    setNoResults(false);
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`
+    );
+    const data = await response.json();
+
+    if (data.results && data.results.length > 0) {
+      setSuggestions(data.results.map(city => ({
+        name: `${city.name}${city.admin1 ?`, ${city.admin1}`: ''}, ${city.country}`,
+        lat: city.latitude,
+        lon: city.longitude
+      })));
+      setNoResults(false);
+    } else {
+      setSuggestions([]);
+      setNoResults(true);
+    }
+  } catch (error) {
+    console.error('Suggestion fetch error:', error);
+    setSuggestions([]);
+    setNoResults(true);
+  }
+};
+
+const handleSuggestionSelect = (item) => {
+  setSearchQuery('');
+  setLocation(item.name);
+  setCoordinates({ lat: item.lat, lon: item.lon });
+  setSuggestions([]);
+  setNoResults(false);
+};
 
   const handleSearch = async () => {
     if (searchQuery.trim()) {
@@ -252,7 +293,9 @@ export default function WeatherApp() {
                 placeholder="Search location..."
                 placeholderTextColor="#E3F2FD"
                 value={searchQuery}
-                onChangeText={setSearchQuery}
+                onChangeText={(text) => {
+                  setSearchQuery(text);
+                  fetchCitySuggestions(text);}}
                 onSubmitEditing={handleSearch}
               />
               <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
@@ -260,6 +303,23 @@ export default function WeatherApp() {
               </TouchableOpacity>
             </View>
           </View>
+{suggestions.length > 0 && (
+  <View style={styles.suggestionBox}>
+    {suggestions.map((item, index) => (
+      <TouchableOpacity 
+        key={index} 
+        style={styles.suggestionItem} 
+        onPress={() => handleSuggestionSelect(item)}
+      >
+        <Text style={styles.suggestionText}>{item.name}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+)}
+
+{noResults && (
+  <Text style={styles.noResultText}>No such city found.</Text>
+)}
 
           {/* Current Location */}
           <View style={styles.locationContainer}>
@@ -527,4 +587,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E3F2FD',
   },
+
+  suggestionBox: {
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  borderRadius: 8,
+  marginHorizontal: 20,
+  marginTop: -10,
+  marginBottom: 10,
+  zIndex: 1,
+},
+suggestionItem: {
+  paddingVertical: 10,
+  paddingHorizontal: 15,
+  borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+  borderBottomWidth: 1,
+},
+suggestionText: {
+  color: '#ffffff',
+},
+noResultText: {
+  color: '#ffdddd',
+  paddingHorizontal: 20,
+  marginTop: 5,
+  marginBottom: 10,
+},
+
 });
