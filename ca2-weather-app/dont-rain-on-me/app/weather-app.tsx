@@ -9,38 +9,186 @@ import {
   StatusBar,
   SafeAreaView,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 
 export default function WeatherApp() {
-  const [location, setLocation] = useState('New York, NY');
+  const [location, setLocation] = useState('Loading location...');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentWeather, setCurrentWeather] = useState({
-    temperature: 22,
-    condition: 'Partly Cloudy',
-    humidity: 65,
-    windSpeed: 8,
+    temperature: 0,
+    condition: 'Clear',
+    humidity: 0,
+    windSpeed: 0,
     visibility: 10,
-    feelsLike: 24
+    feelsLike: 0,
   });
+  const [forecast, setForecast] = useState([]);
+  const [hourlyForecast, setHourlyForecast] = useState([]);
+  const [coordinates, setCoordinates] = useState({ lat: null, lon: null });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [forecast, setForecast] = useState([
-    { id: '1', day: 'Today', high: 25, low: 18, condition: 'Partly Cloudy', icon: 'cloud' },
-    { id: '2', day: 'Tomorrow', high: 28, low: 20, condition: 'Sunny', icon: 'sun' },
-    { id: '3', day: 'Wednesday', high: 23, low: 16, condition: 'Rainy', icon: 'rain' },
-    { id: '4', day: 'Thursday', high: 26, low: 19, condition: 'Sunny', icon: 'sun' },
-    { id: '5', day: 'Friday', high: 24, low: 17, condition: 'Partly Cloudy', icon: 'cloud' },
-  ]);
+  // Get user's current location on first load
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
 
-  const [hourlyForecast] = useState([
-    { id: '1', time: '12:00', temp: 22, condition: 'cloud' },
-    { id: '2', time: '13:00', temp: 24, condition: 'sun' },
-    { id: '3', time: '14:00', temp: 26, condition: 'sun' },
-    { id: '4', time: '15:00', temp: 25, condition: 'cloud' },
-    { id: '5', time: '16:00', temp: 23, condition: 'rain' },
-    { id: '6', time: '17:00', temp: 21, condition: 'rain' },
-  ]);
+  // Fetch weather data whenever coordinates change
+  useEffect(() => {
+    if (coordinates.lat !== null && coordinates.lon !== null) {
+      fetchWeatherData(coordinates.lat, coordinates.lon);
+    }
+  }, [coordinates]);
+
+  const getCurrentLocation = async () => {
+    setIsLoading(true);
+    try {
+      // Request permission for location
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        setError('Permission to access location was denied');
+        // Default to New York if permission denied
+        searchLocation('New York');
+        return;
+      }
+
+      // Get current position
+      const position = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = position.coords;
+      
+      // Reverse geocode to get location name
+      const locationDetails = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude
+      });
+
+      if (locationDetails && locationDetails.length > 0) {
+        const { city, region, country } = locationDetails[0];
+        const locationName = city 
+          ? `${city}${region ? `, ${region}` : ''}`
+          : country || 'Current Location';
+        
+        setLocation(locationName);
+        setCoordinates({ lat: latitude, lon: longitude });
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      setError('Unable to retrieve your location');
+      // Default to New York
+      searchLocation('New York');
+    }
+  };
+
+  const searchLocation = async (query) => {
+    setIsLoading(true);
+    try {
+      const geocodeResult = await Location.geocodeAsync(query);
+      
+      if (geocodeResult && geocodeResult.length > 0) {
+        const { latitude, longitude } = geocodeResult[0];
+        
+        // Get location name for the coordinates
+        const locationDetails = await Location.reverseGeocodeAsync({
+          latitude,
+          longitude
+        });
+        
+        if (locationDetails && locationDetails.length > 0) {
+          const { city, region, country } = locationDetails[0];
+          const locationName = city 
+            ? `${city}${region ? `, ${region}` : ''}`
+            : country || query;
+          
+          setLocation(locationName);
+          setCoordinates({ lat: latitude, lon: longitude });
+        } else {
+          setLocation(query);
+          setCoordinates({ lat: latitude, lon: longitude });
+        }
+      } else {
+        Alert.alert('Location not found', 'Please try a different location.');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Error searching location:', error);
+      setError('Unable to find this location');
+      setIsLoading(false);
+    }
+  };
+
+  const fetchWeatherData = async (latitude, longitude) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,apparent_temperature&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error('Weather data not available');
+      }
+      
+      const data = await response.json();
+      
+      // Update current weather
+      setCurrentWeather({
+        temperature: Math.round(data.current.temperature_2m),
+        condition: getConditionFromCode(data.current.weather_code),
+        humidity: data.current.relative_humidity_2m,
+        windSpeed: Math.round(data.current.wind_speed_10m),
+        visibility: 10, // Not provided by Open-Meteo in free tier
+        feelsLike: Math.round(data.current.apparent_temperature)
+      });
+      
+      // Update hourly forecast (next 24 hours)
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const hourlyData = data.hourly.time
+        .slice(currentHour, currentHour + 24)
+        .map((time, index) => ({
+          id: String(index),
+          time: new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          temp: Math.round(data.hourly.temperature_2m[currentHour + index]),
+          condition: getIconFromCode(data.hourly.weather_code[currentHour + index]),
+          precipitation: data.hourly.precipitation_probability?.[currentHour + index] || 0
+        }))
+        .slice(0, 12); // Limit to next 12 hours
+      
+      setHourlyForecast(hourlyData);
+      
+      // Update 5-day forecast
+      const forecastData = data.daily.time.map((time, index) => ({
+        id: String(index),
+        day: getDayLabel(index),
+        high: Math.round(data.daily.temperature_2m_max[index]),
+        low: Math.round(data.daily.temperature_2m_min[index]),
+        condition: getConditionFromCode(data.daily.weather_code[index]),
+        icon: getIconFromCode(data.daily.weather_code[index])
+      })).slice(0, 5); // Ensure exactly 5 days
+      
+      setForecast(forecastData);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      setError('Unable to fetch weather data. Please try again.');
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      searchLocation(searchQuery);
+      setSearchQuery('');
+    }
+  };
 
   const getWeatherIcon = (condition) => {
     switch (condition) {
@@ -50,51 +198,47 @@ export default function WeatherApp() {
         return 'cloud';
       case 'rain':
         return 'grain';
+      case 'storm':
+        return 'flash-on';
+      case 'snow':
+        return 'ac-unit';
       default:
         return 'wb-sunny';
     }
   };
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      setLocation(searchQuery);
-      setSearchQuery('');
-      // Here you would integrate with your weather API
-      // fetchWeatherData(searchQuery);
-    }
+  const getConditionFromCode = (code) => {
+    // WMO Weather interpretation codes (WW)
+    // https://open-meteo.com/en/docs
+    if (code === 0) return 'Clear Sky';
+    if (code === 1) return 'Mainly Clear';
+    if (code === 2) return 'Partly Cloudy';
+    if (code === 3) return 'Overcast';
+    if (code <= 49) return 'Fog';
+    if (code <= 59) return 'Drizzle';
+    if (code <= 69) return 'Rain';
+    if (code <= 79) return 'Snow';
+    if (code <= 99) return 'Thunderstorm';
+    return 'Unknown';
   };
-
-  // API integration function (implement this with your weather API)
-  const fetchWeatherData = async (location) => {
-    try {
-      // Example API call structure
-      // const response = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=YOUR_API_KEY&q=${location}&days=5&aqi=no&alerts=no`);
-      // const data = await response.json();
-      // setCurrentWeather({
-      //   temperature: data.current.temp_c,
-      //   condition: data.current.condition.text,
-      //   humidity: data.current.humidity,
-      //   windSpeed: data.current.wind_kph,
-      //   visibility: data.current.vis_km,
-      //   feelsLike: data.current.feelslike_c
-      // });
-      // setForecast(data.forecast.forecastday.map((day, index) => ({
-      //   id: index.toString(),
-      //   day: index === 0 ? 'Today' : new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }),
-      //   high: Math.round(day.day.maxtemp_c),
-      //   low: Math.round(day.day.mintemp_c),
-      //   condition: day.day.condition.text,
-      //   icon: getConditionIcon(day.day.condition.text)
-      // })));
-    } catch (error) {
-      console.error('Error fetching weather data:', error);
-    }
+  
+  const getIconFromCode = (code) => {
+    if (code === 0 || code === 1) return 'sun';
+    if (code >= 2 && code <= 3) return 'cloud';
+    if (code >= 4 && code <= 49) return 'cloud'; // fog
+    if (code >= 50 && code <= 69) return 'rain'; // drizzle & rain
+    if (code >= 70 && code <= 79) return 'snow';
+    if (code >= 80 && code <= 99) return 'storm'; // thunderstorm
+    return 'cloud';
   };
-
-  useEffect(() => {
-    // Fetch initial weather data
-    // fetchWeatherData(location);
-  }, []);
+  
+  const getDayLabel = (index) => {
+    if (index === 0) return 'Today';
+    if (index === 1) return 'Tomorrow';
+    const date = new Date();
+    date.setDate(date.getDate() + index);
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
+  };
 
   const renderHourlyItem = ({ item }) => (
     <View style={styles.hourlyItem}>
@@ -106,6 +250,9 @@ export default function WeatherApp() {
         style={styles.hourlyIcon}
       />
       <Text style={styles.hourlyTemp}>{item.temp}°</Text>
+      {item.precipitation > 0 && (
+        <Text style={styles.precipChance}>{item.precipitation}%</Text>
+      )}
     </View>
   );
 
@@ -128,7 +275,7 @@ export default function WeatherApp() {
       </View>
     </View>
   );
-
+  
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -140,7 +287,9 @@ export default function WeatherApp() {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Weather</Text>
-            <MaterialIcons name="location-on" size={24} color="#ffffff" />
+            <TouchableOpacity onPress={getCurrentLocation}>
+              <MaterialIcons name="my-location" size={24} color="#ffffff" />
+            </TouchableOpacity>
           </View>
 
           {/* Search Bar */}
@@ -162,7 +311,10 @@ export default function WeatherApp() {
 
           {/* Current Location */}
           <View style={styles.locationContainer}>
-            <Text style={styles.locationText}>{location}</Text>
+            <View style={styles.locationNameContainer}>
+              <MaterialIcons name="location-on" size={18} color="#ffffff" style={styles.locationIcon} />
+              <Text style={styles.locationText}>{location}</Text>
+            </View>
             <Text style={styles.dateText}>
               {new Date().toLocaleDateString('en-US', { 
                 weekday: 'long', 
@@ -173,60 +325,85 @@ export default function WeatherApp() {
             </Text>
           </View>
 
-          {/* Current Weather */}
-          <View style={styles.currentWeatherContainer}>
-            <MaterialIcons name="cloud" size={80} color="#ffffff" style={styles.mainWeatherIcon} />
-            <Text style={styles.currentTemp}>{currentWeather.temperature}°</Text>
-            <Text style={styles.currentCondition}>{currentWeather.condition}</Text>
-            <Text style={styles.feelsLike}>Feels like {currentWeather.feelsLike}°</Text>
-          </View>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#ffffff" />
+              <Text style={styles.loadingText}>Loading weather data...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <MaterialIcons name="error-outline" size={48} color="#ffffff" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity 
+                style={styles.retryButton}
+                onPress={() => coordinates.lat && fetchWeatherData(coordinates.lat, coordinates.lon)}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* Current Weather */}
+              <View style={styles.currentWeatherContainer}>
+                <MaterialIcons 
+                  name={getWeatherIcon(getIconFromCode(currentWeather.condition))} 
+                  size={80} 
+                  color="#ffffff" 
+                  style={styles.mainWeatherIcon} 
+                />
+                <Text style={styles.currentTemp}>{currentWeather.temperature}°</Text>
+                <Text style={styles.currentCondition}>{currentWeather.condition}</Text>
+                <Text style={styles.feelsLike}>Feels like {currentWeather.feelsLike}°</Text>
+              </View>
 
-          {/* Weather Details */}
-          <View style={styles.detailsContainer}>
-            <View style={styles.detailItem}>
-              <Feather name="wind" size={24} color="#ffffff" />
-              <Text style={styles.detailLabel}>Wind</Text>
-              <Text style={styles.detailValue}>{currentWeather.windSpeed} km/h</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Feather name="droplets" size={24} color="#ffffff" />
-              <Text style={styles.detailLabel}>Humidity</Text>
-              <Text style={styles.detailValue}>{currentWeather.humidity}%</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Feather name="eye" size={24} color="#ffffff" />
-              <Text style={styles.detailLabel}>Visibility</Text>
-              <Text style={styles.detailValue}>{currentWeather.visibility} km</Text>
-            </View>
-          </View>
+              {/* Weather Details */}
+              <View style={styles.detailsContainer}>
+                <View style={styles.detailItem}>
+                  <Feather name="wind" size={24} color="#ffffff" />
+                  <Text style={styles.detailLabel}>Wind</Text>
+                  <Text style={styles.detailValue}>{currentWeather.windSpeed} km/h</Text>
+                </View>
+                <View style={styles.detailItem}>
+                  <Feather name="droplets" size={24} color="#ffffff" />
+                  <Text style={styles.detailLabel}>Humidity</Text>
+                  <Text style={styles.detailValue}>{currentWeather.humidity}%</Text>
+                </View>
+                <View style={styles.detailItem}>
+                  <Feather name="eye" size={24} color="#ffffff" />
+                  <Text style={styles.detailLabel}>Visibility</Text>
+                  <Text style={styles.detailValue}>{currentWeather.visibility} km</Text>
+                </View>
+              </View>
 
-          {/* Hourly Forecast */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Hourly Forecast</Text>
-            <View style={styles.hourlyContainer}>
-              <FlatList
-                data={hourlyForecast}
-                renderItem={renderHourlyItem}
-                keyExtractor={(item) => item.id}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.hourlyList}
-              />
-            </View>
-          </View>
+              {/* Hourly Forecast */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Hourly Forecast</Text>
+                <View style={styles.hourlyContainer}>
+                  <FlatList
+                    data={hourlyForecast}
+                    renderItem={renderHourlyItem}
+                    keyExtractor={(item) => item.id}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.hourlyList}
+                  />
+                </View>
+              </View>
 
-          {/* 5-Day Forecast */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>5-Day Forecast</Text>
-            <View style={styles.forecastContainer}>
-              <FlatList
-                data={forecast}
-                renderItem={renderForecastItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
-            </View>
-          </View>
+              {/* 5-Day Forecast */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>5-Day Forecast</Text>
+                <View style={styles.forecastContainer}>
+                  <FlatList
+                    data={forecast}
+                    renderItem={renderForecastItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                  />
+                </View>
+              </View>
+            </>
+          )}
         </ScrollView>
       </LinearGradient>
     </SafeAreaView>
@@ -280,11 +457,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
   },
+  locationNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  locationIcon: {
+    marginRight: 5,
+  },
   locationText: {
     fontSize: 20,
     fontWeight: '600',
     color: '#ffffff',
-    marginBottom: 5,
   },
   dateText: {
     fontSize: 14,
@@ -371,6 +555,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
   },
+  precipChance: {
+    fontSize: 12,
+    color: '#E3F2FD',
+    marginTop: 4,
+  },
   forecastContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 16,
@@ -414,5 +603,38 @@ const styles = StyleSheet.create({
   forecastLow: {
     fontSize: 16,
     color: '#E3F2FD',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+  },
+  loadingText: {
+    color: '#ffffff',
+    marginTop: 20,
+    fontSize: 16,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    color: '#ffffff',
+    marginTop: 20,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
 });
