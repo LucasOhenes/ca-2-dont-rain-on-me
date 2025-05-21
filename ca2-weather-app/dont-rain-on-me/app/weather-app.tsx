@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -17,6 +18,8 @@ export default function WeatherApp() {
   const [location, setLocation] = useState('Dublin, Leinster, Ireland');
   const [coordinates, setCoordinates] = useState({ lat: 53.33306, lon:  -6.24889});
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [noResults, setNoResults] = useState(false);
@@ -228,6 +231,7 @@ const handleSuggestionSelect = (item) => {
         const locationData = await geocodeLocation(searchQuery);
         setLocation(locationData.name);
         setCoordinates({ lat: locationData.lat, lon: locationData.lon });
+        await saveSearchToHistory(locationData.name);
         setSearchQuery('');
       } catch (error) {
         console.error('Search error:', error);
@@ -236,8 +240,33 @@ const handleSuggestionSelect = (item) => {
     }
   };
 
+
+  //history save and clear history functions
+  
+  const saveSearchToHistory = async (query) => {
+  try {
+    const updated = [query, ...searchHistory.filter(q => q !== query)].slice(0, 5);
+    setSearchHistory(updated);
+    await AsyncStorage.setItem('weather_search_history', JSON.stringify(updated));
+  } catch (error) {
+    console.error('Failed to save search:', error);
+  }
+};
+
+
+const clearSearchHistory = async () => {
+  try {
+    await AsyncStorage.removeItem('weather_search_history');
+    setSearchHistory([]);
+  } catch (error) {
+    console.error('Failed to clear history:', error);
+  }
+};
+
+
+
   useEffect(() => {
-    // Fetch initial weather data for New York
+    // Fetch initial weather data for Dublin
     fetchWeatherData(coordinates.lat, coordinates.lon);
   }, []);
 
@@ -247,6 +276,23 @@ const handleSuggestionSelect = (item) => {
       fetchWeatherData(coordinates.lat, coordinates.lon);
     }
   }, [coordinates]);
+
+//loading search history 
+  useEffect(() => {
+  loadSearchHistory();
+}, []);
+
+const loadSearchHistory = async () => {
+  try {
+    const history = await AsyncStorage.getItem('weather_search_history');
+    if (history) {
+      setSearchHistory(JSON.parse(history));
+    }
+  } catch (error) {
+    console.error('Failed to load history:', error);
+  }
+};
+
 
   const renderHourlyItem = ({ item }) => (
     <View style={styles.hourlyItem}>
@@ -303,11 +349,15 @@ const handleSuggestionSelect = (item) => {
                 placeholder="Search location..."
                 placeholderTextColor="#E3F2FD"
                 value={searchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)} // Delay so click can register
                 onChangeText={(text) => {
                   setSearchQuery(text);
-                  fetchCitySuggestions(text);}}
+                  fetchCitySuggestions(text);
+                }}
                 onSubmitEditing={handleSearch}
               />
+
               <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
                 <Feather name="search" size={20} color="#ffffff" />
               </TouchableOpacity>
@@ -326,6 +376,30 @@ const handleSuggestionSelect = (item) => {
     ))}
   </View>
 )}
+
+{isSearchFocused && searchQuery.trim() === '' && searchHistory.length > 0 && (
+  <View style={styles.suggestionBox}>
+    {searchHistory.map((item, index) => (
+      <TouchableOpacity 
+        key={`history-${index}`} 
+        style={styles.suggestionItem}
+        onPress={() => {
+          setSearchQuery(item);
+          handleSearch(); // Auto trigger search
+        }}
+      >
+        <Text style={styles.suggestionText}>{item}</Text>
+      </TouchableOpacity>
+    ))}
+    <TouchableOpacity 
+      style={[styles.suggestionItem, { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' }]}
+      onPress={clearSearchHistory}
+    >
+      <Text style={[styles.suggestionText, { color: '#ffaaaa' }]}>Clear Search History</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
 
 {noResults && (
   <Text style={styles.noResultText}>No such city found.</Text>
