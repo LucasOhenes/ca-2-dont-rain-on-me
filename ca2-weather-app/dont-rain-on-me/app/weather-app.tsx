@@ -15,16 +15,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 
 export default function WeatherApp() {
-  const [location, setLocation] = useState('Dublin, Leinster, Ireland');
-  const [coordinates, setCoordinates] = useState({ lat: 53.33306, lon:  -6.24889});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchHistory, setSearchHistory] = useState([]);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const [noResults, setNoResults] = useState(false);
-  const [isCelsius, setIsCelsius] = useState(true); // creating element to toggle celsius/farhenheit 
 
+  // ----> STATE MANAGEMENT
+  
+  
+  // Location and coordinates state - Dublin is the default location
+  const [location, setLocation] = useState('Dublin, Leinster, Ireland');
+  const [coordinates, setCoordinates] = useState({ lat: 53.33306, lon: -6.24889});
+  
+  // Search functionality state
+  const [searchQuery, setSearchQuery] = useState(''); // Current search input
+  const [searchHistory, setSearchHistory] = useState([]); // Stored search history from AsyncStorage
+  const [isSearchFocused, setIsSearchFocused] = useState(false); // Controls when to show history/suggestions
+  const [suggestions, setSuggestions] = useState([]); // Live city suggestions from geocoding API
+  const [noResults, setNoResults] = useState(false); // Shows "no results" message
+  
+  // App state
+  const [loading, setLoading] = useState(false); // Loading indicator for API calls
+  const [isCelsius, setIsCelsius] = useState(true); // Temperature unit toggle (C° or F°)
+
+  // Weather data state - current conditions
   const [currentWeather, setCurrentWeather] = useState({
     temperature: null,
     condition: 'Loading...',
@@ -34,29 +44,40 @@ export default function WeatherApp() {
     feelsLike: null
   });
 
-  const [forecast, setForecast] = useState([]);
-  const [hourlyForecast, setHourlyForecast] = useState([]);
+  // Weather forecast data
+  const [forecast, setForecast] = useState([]); // 5-day daily forecast
+  const [hourlyForecast, setHourlyForecast] = useState([]); // 12-hour hourly forecast
 
+  
+  // WEATHER CODE MAPPING TO ICONS AND HUMAN-FRIENDLY DESCRIPTIONS
+ 
+  
+  /**
+   * Maps Open-Meteo weather codes to Material Icons
+   * Weather codes reference: https://open-meteo.com/en/docs
+   */
   const getWeatherIcon = (weatherCode) => {
-  // Open-Meteo weather codes to icon mapping
-  if (weatherCode >= 0 && weatherCode <= 3) {
-    return weatherCode <= 1 ? 'wb-sunny' : 'cloud';
-  } else if (weatherCode >= 45 && weatherCode <= 48) {
-    return 'blur-on'; // Fog
-  } else if (weatherCode >= 51 && weatherCode <= 67) {
-    return 'grain'; // Drizzle/Rain
-  } else if (weatherCode >= 71 && weatherCode <= 77) {
-    return 'ac-unit'; // Snow
-  } else if (weatherCode >= 80 && weatherCode <= 82) {
-    return 'grain'; // Rain showers (same as drizzle/rain)
-  } else if (weatherCode >= 85 && weatherCode <= 86) {
-    return 'ac-unit'; // Snow showers
-  } else if (weatherCode >= 95 && weatherCode <= 99) {
-    return 'flash-on'; // Thunderstorm
-  }
-  return 'wb-sunny';
-};
+    if (weatherCode >= 0 && weatherCode <= 3) {
+      return weatherCode <= 1 ? 'wb-sunny' : 'cloud'; // Clear to partly cloudy
+    } else if (weatherCode >= 45 && weatherCode <= 48) {
+      return 'blur-on'; // Fog conditions
+    } else if (weatherCode >= 51 && weatherCode <= 67) {
+      return 'grain'; // Rain conditions (drizzle to heavy rain)
+    } else if (weatherCode >= 71 && weatherCode <= 77) {
+      return 'ac-unit'; // Snow conditions
+    } else if (weatherCode >= 80 && weatherCode <= 82) {
+      return 'grain'; // Rain showers
+    } else if (weatherCode >= 85 && weatherCode <= 86) {
+      return 'ac-unit'; // Snow showers
+    } else if (weatherCode >= 95 && weatherCode <= 99) {
+      return 'flash-on'; // Thunderstorm conditions
+    }
+    return 'wb-sunny'; // Default fallback
+  };
 
+  /**
+   * Converts Open-Meteo weather codes to human-friendly descriptions
+   */
   const getWeatherCondition = (weatherCode) => {
     const conditions = {
       0: 'Clear sky',
@@ -91,16 +112,25 @@ export default function WeatherApp() {
     return conditions[weatherCode] || 'Unknown';
   };
 
-
-  //Function to format temperature according to measurement unit
+  /**
+   * Formats temperature based on user's unit preference (Celsius/Fahrenheit)
+   * Handles null values and converts between units
+   */
   const formatTemperature = (tempCelsius) => {
     if(tempCelsius === null || tempCelsius === '--') return '--°';
     return isCelsius 
     ? `${tempCelsius}°C`
-    : `${Math.round((tempCelsius * 9) / 5 + 32)}°F` // if temperature is in celcius, return it, if not, use conversion expression to  convert it to fahrenheit and return that. 
+    : `${Math.round((tempCelsius * 9) / 5 + 32)}°F`;
   }
 
-  // Geocoding function to get coordinates from location name
+  
+  //------> API INTEGRATION:
+  
+  
+  /**
+   * Geocodes a location name to coordinates using Open-Meteo Geocoding API
+   * Returns formatted location object with lat/lon and display name
+   */
   const geocodeLocation = async (locationName) => {
     try {
       const response = await fetch(
@@ -123,29 +153,32 @@ export default function WeatherApp() {
     }
   };
 
-  // Fetch weather data from Open-Meteo API
+  /**
+   * Fetches weather data from Open-Meteo API
+   * Gets current weather, hourly forecast (12 hours), and daily forecast (5 days)
+   */
   const fetchWeatherData = async (lat, lon) => {
     try {
       setLoading(true);
       
-      // Fetch current and forecast weather
+      // Comprehensive weather data request - current, hourly, and daily forecasts
       const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5&forecast_hours=12`
       );
       
       const data = await response.json();
       
-      // Update current weather
+      // Process current weather data
       setCurrentWeather({
         temperature: Math.round(data.current.temperature_2m),
         condition: getWeatherCondition(data.current.weather_code),
         humidity: data.current.relative_humidity_2m,
         windSpeed: Math.round(data.current.wind_speed_10m),
-        visibility: null, // Open-Meteo doesn't provide visibility
+        visibility: null, // Open-Meteo doesn't provide visibility data
         feelsLike: Math.round(data.current.apparent_temperature)
       });
 
-      // Update hourly forecast (next 12 hours)
+      // Process hourly forecast data (next 12 hours)
       const currentHour = new Date().getHours();
       const hourlyData = data.hourly.time.slice(0, 12).map((time, index) => {
         const hour = new Date(time).getHours();
@@ -158,8 +191,9 @@ export default function WeatherApp() {
       });
       setHourlyForecast(hourlyData);
 
-      // Update 5-day forecast
+      // Process daily forecast data (5 days)
       const dailyData = data.daily.time.map((date, index) => {
+        // Format day names - Today, Tomorrow, then weekday names
         const dayName = index === 0 ? 'Today' : 
                        index === 1 ? 'Tomorrow' : 
                        new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
@@ -177,7 +211,7 @@ export default function WeatherApp() {
 
     } catch (error) {
       console.error('Error fetching weather data:', error);
-      // Show error state
+      // Set fallback values when API fails
       setCurrentWeather({
         temperature: '--',
         condition: 'Unable to load weather',
@@ -191,6 +225,10 @@ export default function WeatherApp() {
     }
   };
 
+  /**
+   * Fetches city suggestions for search autocomplete
+   * Debounced through the search input's onChange handler
+   */
   const fetchCitySuggestions = async (query) => {
     if (!query.trim()) {
       setSuggestions([]);
@@ -199,12 +237,14 @@ export default function WeatherApp() {
     }
 
     try {
+      // Get up to 5 city suggestions from geocoding API
       const response = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`
       );
       const data = await response.json();
 
       if (data.results && data.results.length > 0) {
+        // Format suggestions with full location names
         setSuggestions(data.results.map(city => ({
           name: `${city.name}${city.admin1 ?`, ${city.admin1}`: ''}, ${city.country}`,
           lat: city.latitude,
@@ -222,22 +262,36 @@ export default function WeatherApp() {
     }
   };
 
-  // UPDATED: Handle suggestion selection
+
+  // SEARCH AND HISTORY HANDLERS
+  
+  
+  /**
+   * Handles selection of a city suggestion from the dropdown
+   * Updates location, coordinates, and saves to search history
+   */
   const handleSuggestionSelect = async (item) => {
-    // Update location data
     setLocation(item.name);
     setCoordinates({ lat: item.lat, lon: item.lon });
     
-    // Save to history
-    await saveSearchToHistory(item.name);
+    // Save complete location data to history (includes coordinates for faster access)
+    await saveSearchToHistory({
+      name: item.name,
+      lat: item.lat,
+      lon: item.lon
+    });
     
-    // Clear UI state
+    // Clear search UI state
     setSearchQuery('');
     setSuggestions([]);
     setIsSearchFocused(false);
+    setNoResults(false);
   };
 
-  // UPDATED: Handle search
+  /**
+   * Handles manual search submission (when user presses enter or search button)
+   * Geocodes the search query and updates location
+   */
   const handleSearch = async () => {
     if (searchQuery.trim()) {
       try {
@@ -246,16 +300,20 @@ export default function WeatherApp() {
         setLocation(locationData.name);
         setCoordinates({ lat: locationData.lat, lon: locationData.lon });
         
-        // Save to history after successful search
-        await saveSearchToHistory(locationData.name);
+        // Save complete location data to history
+        await saveSearchToHistory({
+          name: locationData.name,
+          lat: locationData.lat,
+          lon: locationData.lon
+        });
         
-        // Clear the search query and suggestions
+        // Clear search UI state
         setSearchQuery('');
         setSuggestions([]);
         setIsSearchFocused(false);
+        setNoResults(false);
       } catch (error) {
         console.error('Search error:', error);
-        // Show error message
         setNoResults(true);
       } finally {
         setLoading(false);
@@ -263,20 +321,25 @@ export default function WeatherApp() {
     }
   };
 
-  // Handle history item selection
+  /**
+   * Handles selection from search history
+   * Uses stored coordinates to avoid re-geocoding
+   */
   const handleHistorySelect = async (historyItem) => {
     try {
       setLoading(true);
-      const locationData = await geocodeLocation(historyItem);
-      setLocation(locationData.name);
-      setCoordinates({ lat: locationData.lat, lon: locationData.lon });
       
-      // Move selected item to top of history
-      await saveSearchToHistory(locationData.name);
+      // Use stored coordinates directly - no need to geocode again
+      setLocation(historyItem.name);
+      setCoordinates({ lat: historyItem.lat, lon: historyItem.lon });
       
-      // Clear UI state
+      // Move selected item to top of history (most recently used)
+      await saveSearchToHistory(historyItem);
+      
+      // Clear search UI state
       setSearchQuery('');
       setIsSearchFocused(false);
+      setNoResults(false);
     } catch (error) {
       console.error('History selection error:', error);
     } finally {
@@ -284,11 +347,22 @@ export default function WeatherApp() {
     }
   };
 
-  // Save search to history
-  const saveSearchToHistory = async (query) => {
+  
+  // ----> PERSISTENT STORAGE FUNCTIONS
+  
+  
+  /**
+   * Saves the locationdata to search history in asyncStorage
+   * Maintains a maximum of 5 recent searches, with most recent first
+   */
+  const saveSearchToHistory = async (locationData) => {
     try {
-      // Remove the query if it exists and add it to the front
-      const updated = [query, ...searchHistory.filter(q => q !== query)].slice(0, 5);
+      // Remove existing entry and add to front, limit to 5 items
+      const updated = [
+        locationData, 
+        ...searchHistory.filter(item => item.name !== locationData.name)
+      ].slice(0, 5);
+      
       setSearchHistory(updated);
       await AsyncStorage.setItem('weather_search_history', JSON.stringify(updated));
       return true;
@@ -298,7 +372,9 @@ export default function WeatherApp() {
     }
   };
 
-  // Clear search history
+  /**
+   * Clears all search history from storage and state
+   */
   const clearSearchHistory = async () => {
     try {
       await AsyncStorage.removeItem('weather_search_history');
@@ -308,33 +384,55 @@ export default function WeatherApp() {
     }
   };
 
-  // Initial fetch
+
+  //------> EFFECTS ANS INITIALISATION
+  
+  
+  // Initialize app - fetch weather for default location and load search history
   useEffect(() => {
-    // Fetch initial weather data for Dublin
     fetchWeatherData(coordinates.lat, coordinates.lon);
-    // Load search history
     loadSearchHistory();
   }, []);
 
-  // Fetch weather when coordinates change
+  // Fetch new weather data whenever coordinates change
   useEffect(() => {
     if (coordinates.lat && coordinates.lon) {
       fetchWeatherData(coordinates.lat, coordinates.lon);
     }
   }, [coordinates]);
 
-  // Load search history
+  /**
+   * Loads search history from AsyncStorage on app startup
+   * Handles backward compatibility with old string-only format
+   */
   const loadSearchHistory = async () => {
     try {
       const history = await AsyncStorage.getItem('weather_search_history');
       if (history) {
-        setSearchHistory(JSON.parse(history));
+        const parsedHistory = JSON.parse(history);
+        // Handle both old format (strings) and new format (objects with coordinates)
+        const formattedHistory = parsedHistory.map(item => {
+          if (typeof item === 'string') {
+            // Convert old format to new format (coordinates will be null until first use)
+            return { name: item, lat: null, lon: null };
+          }
+          return item;
+        });
+        setSearchHistory(formattedHistory);
       }
     } catch (error) {
       console.error('Failed to load history:', error);
     }
   };
 
+  
+  // ------> FLATLIST RENDER FUNCTIONS
+  
+  
+  /**
+   * Renders individual hourly forecast items
+   * Shows time, weather icon, and temperature
+   */
   const renderHourlyItem = ({ item }) => (
     <View style={styles.hourlyItem}>
       <Text style={styles.hourlyTime}>{item.time}</Text>
@@ -348,6 +446,10 @@ export default function WeatherApp() {
     </View>
   );
 
+  /**
+   * Renders individual daily forecast items
+   * Shows day, weather icon, condition, and high/low temperatures
+   */
   const renderForecastItem = ({ item }) => (
     <View style={styles.forecastItem}>
       <View style={styles.forecastLeft}>
@@ -368,21 +470,28 @@ export default function WeatherApp() {
     </View>
   );
 
+ 
+  // ----> MAIN COMPONENT RENDER
+
+  
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
+      
+      {/* Main gradient background */}
       <LinearGradient
         colors={['#4A90E2', '#357ABD', '#2E6DA4']}
         style={styles.gradient}
       >
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {/* Header */}
+          
+          {/* App header with title and location icon */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Weather</Text>
             <MaterialIcons name="location-on" size={24} color="#ffffff" />
           </View>
 
-          {/* Search Bar */}
+          {/* Search bar section */}
           <View style={styles.searchContainer}>
             <View style={styles.searchBar}>
               <TextInput
@@ -391,10 +500,14 @@ export default function WeatherApp() {
                 placeholderTextColor="#E3F2FD"
                 value={searchQuery}
                 onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)} // Delay so click can register
+                onBlur={() => {
+                  // Delayed blur to allow click events on suggestions to register
+                  setTimeout(() => setIsSearchFocused(false), 300);
+                }}
                 onChangeText={(text) => {
                   setSearchQuery(text);
-                  fetchCitySuggestions(text);
+                  fetchCitySuggestions(text); // Live search suggestions
+                  setNoResults(false);
                 }}
                 onSubmitEditing={handleSearch}
               />
@@ -405,7 +518,7 @@ export default function WeatherApp() {
             </View>
           </View>
 
-          {/* City suggestions */}
+          {/* City suggestions dropdown - shows when typing */}
           {suggestions.length > 0 && (
             <View style={styles.suggestionBox}>
               {suggestions.map((item, index) => (
@@ -420,7 +533,7 @@ export default function WeatherApp() {
             </View>
           )}
 
-          {/* Search history */}
+          {/* Search history dropdown - shows when focused with empty search */}
           {isSearchFocused && searchQuery.trim() === '' && searchHistory.length > 0 && (
             <View style={styles.suggestionBox}>
               <Text style={styles.historyHeader}>Recent Searches</Text>
@@ -430,7 +543,7 @@ export default function WeatherApp() {
                   style={styles.suggestionItem}
                   onPress={() => handleHistorySelect(item)}
                 >
-                  <Text style={styles.suggestionText}>{item}</Text>
+                  <Text style={styles.suggestionText}>{item.name}</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity 
@@ -447,7 +560,7 @@ export default function WeatherApp() {
             <Text style={styles.noResultText}>No such city found.</Text>
           )}
 
-          {/* Current Location */}
+          {/* Current location and date display */}
           <View style={styles.locationContainer}>
             <Text style={styles.locationText}>{location}</Text>
             <Text style={styles.dateText}>
@@ -460,7 +573,7 @@ export default function WeatherApp() {
             </Text>
           </View>
 
-          {/* Current Weather */}
+          {/* Main current weather display */}
           <View style={styles.currentWeatherContainer}>
             <MaterialIcons 
               name={currentWeather.condition && currentWeather.temperature ? 
@@ -478,7 +591,7 @@ export default function WeatherApp() {
             </Text>
           </View>
 
-          {/* celsius/fahrenheit toggle button*/}
+          {/* Temperature unit toggle (Celsius/Fahrenheit) */}
           <View style={styles.unitToggleContainer}>
             <TouchableOpacity 
               style={[styles.unitButton, isCelsius && styles.unitButtonActive]} 
@@ -494,7 +607,7 @@ export default function WeatherApp() {
             </TouchableOpacity>
           </View>
 
-          {/* Weather Details */}
+          {/* Weather details section (wind, humidity, visibility) */}
           <View style={styles.detailsContainer}>
             <View style={styles.detailItem}>
               <Feather name="wind" size={24} color="#ffffff" />
@@ -513,7 +626,7 @@ export default function WeatherApp() {
             </View>
           </View>
 
-          {/* Hourly Forecast */}
+          {/* Hourly forecast section */}
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Hourly Forecast</Text>
             <View style={styles.hourlyContainer}>
@@ -528,7 +641,7 @@ export default function WeatherApp() {
             </View>
           </View>
 
-          {/* 5-Day Forecast */}
+          {/* 5-day forecast section */}
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>5-Day Forecast</Text>
             <View style={styles.forecastContainer}>
@@ -546,7 +659,12 @@ export default function WeatherApp() {
   );
 }
 
+
+// ----> STYLESHEET DEFINITIONS
+
+
 const styles = StyleSheet.create({
+  // Main container and layout styles
   container: {
     flex: 1,
   },
@@ -556,6 +674,8 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  
+  // Header section styles
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -569,6 +689,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
+  
+  // Search bar styles
   searchContainer: {
     paddingHorizontal: 20,
     marginBottom: 20,
@@ -589,6 +711,8 @@ const styles = StyleSheet.create({
   searchButton: {
     padding: 5,
   },
+  
+  // Location display styles
   locationContainer: {
     alignItems: 'center',
     marginBottom: 30,
@@ -604,6 +728,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#E3F2FD',
   },
+  
+  // Main current weather display styles
   currentWeatherContainer: {
     alignItems: 'center',
     marginBottom: 30,
@@ -626,6 +752,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#E3F2FD',
   },
+  
+  // Weather details section styles
   detailsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -649,6 +777,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
   },
+  
+  // Forecast section container styles
   sectionContainer: {
     marginHorizontal: 20,
     marginBottom: 20,
@@ -659,6 +789,8 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginBottom: 15,
   },
+  
+  // Hourly forecast styles
   hourlyContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 16,
@@ -685,6 +817,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
   },
+  
+  // Daily forecast styles
   forecastContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 16,
@@ -729,6 +863,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E3F2FD',
   },
+  
+  // Search suggestions and history styles
   suggestionBox: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
