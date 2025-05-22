@@ -109,7 +109,7 @@ export default function WeatherApp() {
         return {
           lat: result.latitude,
           lon: result.longitude,
-          name: `${result.name}${result.admin1 ?`,${result.admin1}`: ''}, ${result.country}`
+          name: `${result.name}${result.admin1 ?`, ${result.admin1}`: ''}, ${result.country}`
         };
       }
       throw new Error('Location not found');
@@ -186,88 +186,130 @@ export default function WeatherApp() {
       setLoading(false);
     }
   };
-const fetchCitySuggestions = async (query) => {
-  if (!query.trim()) {
-    setSuggestions([]);
-    setNoResults(false);
-    return;
-  }
 
-  try {
-    const response = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`
-    );
-    const data = await response.json();
-
-    if (data.results && data.results.length > 0) {
-      setSuggestions(data.results.map(city => ({
-        name: `${city.name}${city.admin1 ?`, ${city.admin1}`: ''}, ${city.country}`,
-        lat: city.latitude,
-        lon: city.longitude
-      })));
+  const fetchCitySuggestions = async (query) => {
+    if (!query.trim()) {
+      setSuggestions([]);
       setNoResults(false);
-    } else {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`
+      );
+      const data = await response.json();
+
+      if (data.results && data.results.length > 0) {
+        setSuggestions(data.results.map(city => ({
+          name: `${city.name}${city.admin1 ?`, ${city.admin1}`: ''}, ${city.country}`,
+          lat: city.latitude,
+          lon: city.longitude
+        })));
+        setNoResults(false);
+      } else {
+        setSuggestions([]);
+        setNoResults(true);
+      }
+    } catch (error) {
+      console.error('Suggestion fetch error:', error);
       setSuggestions([]);
       setNoResults(true);
     }
-  } catch (error) {
-    console.error('Suggestion fetch error:', error);
+  };
+
+  // UPDATED: Handle suggestion selection
+  const handleSuggestionSelect = async (item) => {
+    // Update location data
+    setLocation(item.name);
+    setCoordinates({ lat: item.lat, lon: item.lon });
+    
+    // Save to history
+    await saveSearchToHistory(item.name);
+    
+    // Clear UI state
+    setSearchQuery('');
     setSuggestions([]);
-    setNoResults(true);
-  }
-};
+    setIsSearchFocused(false);
+  };
 
-const handleSuggestionSelect = (item) => {
-  setSearchQuery('');
-  setLocation(item.name);
-  setCoordinates({ lat: item.lat, lon: item.lon });
-  setSuggestions([]);
-  setNoResults(false);
-};
-
+  // UPDATED: Handle search
   const handleSearch = async () => {
     if (searchQuery.trim()) {
       try {
+        setLoading(true);
         const locationData = await geocodeLocation(searchQuery);
         setLocation(locationData.name);
         setCoordinates({ lat: locationData.lat, lon: locationData.lon });
+        
+        // Save to history after successful search
         await saveSearchToHistory(locationData.name);
+        
+        // Clear the search query and suggestions
         setSearchQuery('');
+        setSuggestions([]);
+        setIsSearchFocused(false);
       } catch (error) {
         console.error('Search error:', error);
-        // You could show an error message to the user here
+        // Show error message
+        setNoResults(true);
+      } finally {
+        setLoading(false);
       }
     }
   };
 
+  // NEW: Handle history item selection
+  const handleHistorySelect = async (historyItem) => {
+    try {
+      setLoading(true);
+      const locationData = await geocodeLocation(historyItem);
+      setLocation(locationData.name);
+      setCoordinates({ lat: locationData.lat, lon: locationData.lon });
+      
+      // Move selected item to top of history
+      await saveSearchToHistory(locationData.name);
+      
+      // Clear UI state
+      setSearchQuery('');
+      setIsSearchFocused(false);
+    } catch (error) {
+      console.error('History selection error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  //history save and clear history functions
-  
+  // UPDATED: Save search to history
   const saveSearchToHistory = async (query) => {
-  try {
-    const updated = [query, ...searchHistory.filter(q => q !== query)].slice(0, 5);
-    setSearchHistory(updated);
-    await AsyncStorage.setItem('weather_search_history', JSON.stringify(updated));
-  } catch (error) {
-    console.error('Failed to save search:', error);
-  }
-};
+    try {
+      // Remove the query if it exists and add it to the front
+      const updated = [query, ...searchHistory.filter(q => q !== query)].slice(0, 5);
+      setSearchHistory(updated);
+      await AsyncStorage.setItem('weather_search_history', JSON.stringify(updated));
+      return true;
+    } catch (error) {
+      console.error('Failed to save search:', error);
+      return false;
+    }
+  };
 
+  // Clear search history
+  const clearSearchHistory = async () => {
+    try {
+      await AsyncStorage.removeItem('weather_search_history');
+      setSearchHistory([]);
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+    }
+  };
 
-const clearSearchHistory = async () => {
-  try {
-    await AsyncStorage.removeItem('weather_search_history');
-    setSearchHistory([]);
-  } catch (error) {
-    console.error('Failed to clear history:', error);
-  }
-};
-
-
-
+  // Initial fetch
   useEffect(() => {
     // Fetch initial weather data for Dublin
     fetchWeatherData(coordinates.lat, coordinates.lon);
+    // Load search history
+    loadSearchHistory();
   }, []);
 
   // Fetch weather when coordinates change
@@ -277,22 +319,17 @@ const clearSearchHistory = async () => {
     }
   }, [coordinates]);
 
-//loading search history 
-  useEffect(() => {
-  loadSearchHistory();
-}, []);
-
-const loadSearchHistory = async () => {
-  try {
-    const history = await AsyncStorage.getItem('weather_search_history');
-    if (history) {
-      setSearchHistory(JSON.parse(history));
+  // Load search history
+  const loadSearchHistory = async () => {
+    try {
+      const history = await AsyncStorage.getItem('weather_search_history');
+      if (history) {
+        setSearchHistory(JSON.parse(history));
+      }
+    } catch (error) {
+      console.error('Failed to load history:', error);
     }
-  } catch (error) {
-    console.error('Failed to load history:', error);
-  }
-};
-
+  };
 
   const renderHourlyItem = ({ item }) => (
     <View style={styles.hourlyItem}>
@@ -363,47 +400,48 @@ const loadSearchHistory = async () => {
               </TouchableOpacity>
             </View>
           </View>
-{suggestions.length > 0 && (
-  <View style={styles.suggestionBox}>
-    {suggestions.map((item, index) => (
-      <TouchableOpacity 
-        key={index} 
-        style={styles.suggestionItem} 
-        onPress={() => handleSuggestionSelect(item)}
-      >
-        <Text style={styles.suggestionText}>{item.name}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-)}
 
-{isSearchFocused && searchQuery.trim() === '' && searchHistory.length > 0 && (
-  <View style={styles.suggestionBox}>
-    {searchHistory.map((item, index) => (
-      <TouchableOpacity 
-        key={`history-${index}`} 
-        style={styles.suggestionItem}
-        onPress={() => {
-          setSearchQuery(item);
-          handleSearch(); // Auto trigger search
-        }}
-      >
-        <Text style={styles.suggestionText}>{item}</Text>
-      </TouchableOpacity>
-    ))}
-    <TouchableOpacity 
-      style={[styles.suggestionItem, { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' }]}
-      onPress={clearSearchHistory}
-    >
-      <Text style={[styles.suggestionText, { color: '#ffaaaa' }]}>Clear Search History</Text>
-    </TouchableOpacity>
-  </View>
-)}
+          {/* City suggestions */}
+          {suggestions.length > 0 && (
+            <View style={styles.suggestionBox}>
+              {suggestions.map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.suggestionItem} 
+                  onPress={() => handleSuggestionSelect(item)}
+                >
+                  <Text style={styles.suggestionText}>{item.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
+          {/* Search history */}
+          {isSearchFocused && searchQuery.trim() === '' && searchHistory.length > 0 && (
+            <View style={styles.suggestionBox}>
+              <Text style={styles.historyHeader}>Recent Searches</Text>
+              {searchHistory.map((item, index) => (
+                <TouchableOpacity 
+                  key={`history-${index}`} 
+                  style={styles.suggestionItem}
+                  onPress={() => handleHistorySelect(item)}
+                >
+                  <Text style={styles.suggestionText}>{item}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity 
+                style={[styles.suggestionItem, { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' }]}
+                onPress={clearSearchHistory}
+              >
+                <Text style={[styles.suggestionText, { color: '#ffaaaa' }]}>Clear Search History</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-{noResults && (
-  <Text style={styles.noResultText}>No such city found.</Text>
-)}
+          {/* No results message */}
+          {noResults && (
+            <Text style={styles.noResultText}>No such city found.</Text>
+          )}
 
           {/* Current Location */}
           <View style={styles.locationContainer}>
@@ -432,25 +470,25 @@ const loadSearchHistory = async () => {
             </Text>
             <Text style={styles.currentCondition}>{currentWeather.condition}</Text>
             <Text style={styles.feelsLike}>
-              {currentWeather.feelsLike ? `Feels like ${formatTemperature(currentWeather.feelsLike)}°` : 'Feels like --°'}
+              {currentWeather.feelsLike ? `Feels like ${formatTemperature(currentWeather.feelsLike)}` : 'Feels like --°'}
             </Text>
           </View>
 
-          {/* celcius/farhenheit toggle button*/}
+          {/* celsius/fahrenheit toggle button*/}
           <View style={styles.unitToggleContainer}>
-          <TouchableOpacity 
-          style={[styles.unitButton, isCelsius && styles.unitButtonActive]} 
-          onPress={() => setIsCelsius(true)}
-          >
-          <Text style={styles.unitText}>°C</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-          style={[styles.unitButton, !isCelsius && styles.unitButtonActive]} 
-          onPress={() => setIsCelsius(false)}
-          >
-        <Text style={styles.unitText}>°F</Text>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity 
+              style={[styles.unitButton, isCelsius && styles.unitButtonActive]} 
+              onPress={() => setIsCelsius(true)}
+            >
+              <Text style={[styles.unitText, isCelsius ? {color: '#2E6DA4'} : {color: '#ffffff'}]}>°C</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.unitButton, !isCelsius && styles.unitButtonActive]} 
+              onPress={() => setIsCelsius(false)}
+            >
+              <Text style={[styles.unitText, !isCelsius ? {color: '#2E6DA4'} : {color: '#ffffff'}]}>°F</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Weather Details */}
           <View style={styles.detailsContainer}>
@@ -460,14 +498,14 @@ const loadSearchHistory = async () => {
               <Text style={styles.detailValue}>{currentWeather.windSpeed} km/h</Text>
             </View>
             <View style={styles.detailItem}>
-              <Feather name="droplets" size={24} color="#ffffff" />
+              <Feather name="droplet" size={24} color="#ffffff" />
               <Text style={styles.detailLabel}>Humidity</Text>
               <Text style={styles.detailValue}>{currentWeather.humidity}%</Text>
             </View>
             <View style={styles.detailItem}>
               <Feather name="eye" size={24} color="#ffffff" />
               <Text style={styles.detailLabel}>Visibility</Text>
-              <Text style={styles.detailValue}>{currentWeather.visibility} km</Text>
+              <Text style={styles.detailValue}>{currentWeather.visibility || '--'} km</Text>
             </View>
           </View>
 
@@ -485,8 +523,6 @@ const loadSearchHistory = async () => {
               />
             </View>
           </View>
-
-          
 
           {/* 5-Day Forecast */}
           <View style={styles.sectionContainer}>
@@ -558,6 +594,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
     marginBottom: 5,
+    textAlign: 'center',
   },
   dateText: {
     fontSize: 14,
@@ -688,50 +725,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E3F2FD',
   },
-
   suggestionBox: {
-  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  borderRadius: 8,
-  marginHorizontal: 20,
-  marginTop: -10,
-  marginBottom: 10,
-  zIndex: 1,
-},
-suggestionItem: {
-  paddingVertical: 10,
-  paddingHorizontal: 15,
-  borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-  borderBottomWidth: 1,
-},
-suggestionText: {
-  color: '#ffffff',
-},
-noResultText: {
-  color: '#ffdddd',
-  paddingHorizontal: 20,
-  marginTop: 5,
-  marginBottom: 10,
-},
-unitToggleContainer: {
-  flexDirection: 'row',
-  justifyContent: 'center',
-  marginBottom: 15,
-  marginTop: -10,
-},
-unitButton: {
-  paddingVertical: 6,
-  paddingHorizontal: 16,
-  borderRadius: 20,
-  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  marginHorizontal: 5,
-},
-unitButtonActive: {
-  backgroundColor: '#ffffff',
-},
-unitText: {
-  fontSize: 14,
-  color: '#ADD8E6',
-  fontWeight: '600',
-},
-
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    marginHorizontal: 20,
+    marginTop: -10,
+    marginBottom: 10,
+    zIndex: 1,
+  },
+  suggestionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+    borderBottomWidth: 1,
+  },
+  suggestionText: {
+    color: '#ffffff',
+  },
+  noResultText: {
+    color: '#ffdddd',
+    paddingHorizontal: 20,
+    marginTop: 5,
+    marginBottom: 10,
+  },
+  unitToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 15,
+    marginTop: -10,
+  },
+  unitButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 5,
+  },
+  unitButtonActive: {
+    backgroundColor: '#ffffff',
+  },
+  unitText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  historyHeader: {
+    color: '#ffffff',
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    paddingBottom: 5,
+    fontSize: 12,
+    opacity: 0.8,
+  },
 });
