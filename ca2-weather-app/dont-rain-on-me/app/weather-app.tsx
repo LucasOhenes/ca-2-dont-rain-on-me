@@ -40,7 +40,6 @@ export default function WeatherApp() {
     condition: 'Loading...',
     humidity: null,
     windSpeed: null,
-    visibility: null,
     feelsLike: null
   });
 
@@ -174,7 +173,6 @@ export default function WeatherApp() {
         condition: getWeatherCondition(data.current.weather_code),
         humidity: data.current.relative_humidity_2m,
         windSpeed: Math.round(data.current.wind_speed_10m),
-        visibility: null, // Open-Meteo doesn't provide visibility data
         feelsLike: Math.round(data.current.apparent_temperature)
       });
 
@@ -217,7 +215,6 @@ export default function WeatherApp() {
         condition: 'Unable to load weather',
         humidity: '--',
         windSpeed: '--',
-        visibility: '--',
         feelsLike: '--'
       });
     } finally {
@@ -487,8 +484,7 @@ export default function WeatherApp() {
           
           {/* App header with title and location icon */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Weather</Text>
-            <MaterialIcons name="location-on" size={24} color="#ffffff" />
+            <Text style={styles.headerTitle}>Don't Rain On Me</Text>
           </View>
 
           {/* Search bar section */}
@@ -607,7 +603,7 @@ export default function WeatherApp() {
             </TouchableOpacity>
           </View>
 
-          {/* Weather details section (wind, humidity, visibility) */}
+          {/* Weather details section (wind, humidity) */}
           <View style={styles.detailsContainer}>
             <View style={styles.detailItem}>
               <Feather name="wind" size={24} color="#ffffff" />
@@ -618,11 +614,6 @@ export default function WeatherApp() {
               <Feather name="droplet" size={24} color="#ffffff" />
               <Text style={styles.detailLabel}>Humidity</Text>
               <Text style={styles.detailValue}>{currentWeather.humidity}%</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Feather name="eye" size={24} color="#ffffff" />
-              <Text style={styles.detailLabel}>Visibility</Text>
-              <Text style={styles.detailValue}>{currentWeather.visibility || '--'} km</Text>
             </View>
           </View>
 
