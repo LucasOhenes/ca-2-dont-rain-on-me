@@ -38,20 +38,24 @@ export default function WeatherApp() {
   const [hourlyForecast, setHourlyForecast] = useState([]);
 
   const getWeatherIcon = (weatherCode) => {
-    // Open-Meteo weather codes to icon mapping
-    if (weatherCode >= 0 && weatherCode <= 3) {
-      return weatherCode <= 1 ? 'wb-sunny' : 'cloud';
-    } else if (weatherCode >= 45 && weatherCode <= 48) {
-      return 'blur-on'; // Fog
-    } else if (weatherCode >= 51 && weatherCode <= 67) {
-      return 'grain'; // Drizzle/Rain
-    } else if (weatherCode >= 71 && weatherCode <= 86) {
-      return 'ac-unit'; // Snow
-    } else if (weatherCode >= 95 && weatherCode <= 99) {
-      return 'flash-on'; // Thunderstorm
-    }
-    return 'wb-sunny';
-  };
+  // Open-Meteo weather codes to icon mapping
+  if (weatherCode >= 0 && weatherCode <= 3) {
+    return weatherCode <= 1 ? 'wb-sunny' : 'cloud';
+  } else if (weatherCode >= 45 && weatherCode <= 48) {
+    return 'blur-on'; // Fog
+  } else if (weatherCode >= 51 && weatherCode <= 67) {
+    return 'grain'; // Drizzle/Rain
+  } else if (weatherCode >= 71 && weatherCode <= 77) {
+    return 'ac-unit'; // Snow
+  } else if (weatherCode >= 80 && weatherCode <= 82) {
+    return 'grain'; // Rain showers (same as drizzle/rain)
+  } else if (weatherCode >= 85 && weatherCode <= 86) {
+    return 'ac-unit'; // Snow showers
+  } else if (weatherCode >= 95 && weatherCode <= 99) {
+    return 'flash-on'; // Thunderstorm
+  }
+  return 'wb-sunny';
+};
 
   const getWeatherCondition = (weatherCode) => {
     const conditions = {
@@ -259,7 +263,7 @@ export default function WeatherApp() {
     }
   };
 
-  // NEW: Handle history item selection
+  // Handle history item selection
   const handleHistorySelect = async (historyItem) => {
     try {
       setLoading(true);
@@ -280,7 +284,7 @@ export default function WeatherApp() {
     }
   };
 
-  // UPDATED: Save search to history
+  // Save search to history
   const saveSearchToHistory = async (query) => {
     try {
       // Remove the query if it exists and add it to the front
