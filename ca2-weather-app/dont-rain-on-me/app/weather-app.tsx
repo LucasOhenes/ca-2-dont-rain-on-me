@@ -53,6 +53,12 @@ interface DailyForecastItem {
 export default function WeatherApp() {
   // ----> STATE MANAGEMENT
   
+  const currentHour = new Date().getHours(); 
+  const isDayTime = currentHour >= 6 && currentHour < 18; // this function identify when is day and when is night and change the backgorund
+  const backgroundColors = isDayTime
+  ? ['#B3E5FC', '#81D4FA', '#4FC3F7']  // Light colours (day)
+  : ['#2C003E', '#1A0033', '#0D0026']; // Dark colours (night)
+
   // Location and coordinates state - Dublin is the default location
   const [location, setLocation] = useState<string>('Dublin, Leinster, Ireland');
   const [coordinates, setCoordinates] = useState<Coordinates>({ lat: 53.33306, lon: -6.24889});
@@ -501,7 +507,7 @@ export default function WeatherApp() {
       
         {/* Main gradient background */}
       <LinearGradient
-        colors={['#4A90E2', '#357ABD', '#2E6DA4']}
+        colors={backgroundColors}
         style={styles.gradient}
       >
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
