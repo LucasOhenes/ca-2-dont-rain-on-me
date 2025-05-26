@@ -573,14 +573,33 @@ export default function WeatherApp() {
                   <Text style={styles.suggestionText}>{item.name}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity 
-                style={[styles.suggestionItem, { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' }]}
-                onPress={clearSearchHistory}
-              >
-                <Text style={[styles.suggestionText, { color: '#ffaaaa' }]}>Clear Search History</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+              <TouchableOpacity
+      onPress={() => {
+        console.log('Clearing history…');   // debug no terminal do Expo
+        clearSearchHistory();
+      }}
+      style={[
+        styles.suggestionItem,
+        {
+          marginTop: 8,
+          paddingVertical: 12,
+          backgroundColor: 'rgba(255,0,0,0.2)',
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(255,255,255,0.2)',
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.suggestionText,
+          { color: '#ffaaaa', textAlign: 'center', fontWeight: 'bold' },
+        ]}
+      >
+        Clear Search History
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
 
 
           {/* No results message */}
@@ -888,22 +907,25 @@ const styles = StyleSheet.create({
   },
   
   // Search suggestions and history styles
-  suggestionBox: {
+ suggestionBox: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
+    borderRadius: 10,
     marginHorizontal: 20,
     marginTop: -10,
     marginBottom: 10,
-    zIndex: 1,
+    position: 'absolute', 
+    zIndex: 100,           
+    elevation: 10,   
   },
   suggestionItem: {
     paddingVertical: 10,
     paddingHorizontal: 15,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     borderBottomWidth: 1,
   },
   suggestionText: {
     color: '#ffffff',
+    fontSize: 16,
   },
   noResultText: {
     color: '#ffdddd',
@@ -932,7 +954,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   historyHeader: {
-    color: '#ffffff',
+    color: '#aaa',
     paddingHorizontal: 15,
     paddingTop: 10,
     paddingBottom: 5,
