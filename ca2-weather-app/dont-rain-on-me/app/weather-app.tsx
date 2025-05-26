@@ -53,26 +53,39 @@ interface DailyForecastItem {
 export default function WeatherApp() {
   // ----> STATE MANAGEMENT
   
-  const currentHour = new Date().getHours(); 
-  const isDayTime = currentHour >= 6 && currentHour < 18; // this function identify when is day and when is night and change the backgorund
+  // Add timezone offset state to track the selected city's UTC offset
+  const [cityTimezoneOffset, setCityTimezoneOffset] = useState<number>(0); // in seconds
+  
+  // Calculate day/night based on the selected city's time instead of local time
+  const getCityTime = () => {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000); // Convert to UTC
+    const cityTime = new Date(utc + (cityTimezoneOffset * 1000)); // Add city's offset
+    return cityTime;
+  };
+  
+  const cityTime = getCityTime();
+  const cityHour = cityTime.getHours();
+  const isDayTime = cityHour >= 6 && cityHour < 18; // Day time in the selected city
+  
   const backgroundColors = isDayTime
-  ? ['#4A90E2', '#357ABD', '#2E6DA4']  // Light colours (day)
-  : ['#2C003E', '#1A0033', '#0D0026']; // Dark colours (night)
+    ? ['#4A90E2', '#357ABD', '#2E6DA4']  // Light colours (day)
+    : ['#2C003E', '#1A0033', '#0D0026']; // Dark colours (night)
 
   // Location and coordinates state - Dublin is the default location
   const [location, setLocation] = useState<string>('Dublin, Leinster, Ireland');
   const [coordinates, setCoordinates] = useState<Coordinates>({ lat: 53.33306, lon: -6.24889});
   
   // Search functionality state
-  const [searchQuery, setSearchQuery] = useState<string>(''); //current search input
-  const [searchHistory, setSearchHistory] = useState<LocationData[]>([]); //stored search history from AsyncStorage
-  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false); //controls when to show history/suggestions
-  const [suggestions, setSuggestions] = useState<LocationData[]>([]); //Live city suggestions from geocoding API
-  const [noResults, setNoResults] = useState<boolean>(false); //shows "no results" message
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchHistory, setSearchHistory] = useState<LocationData[]>([]);
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  const [suggestions, setSuggestions] = useState<LocationData[]>([]);
+  const [noResults, setNoResults] = useState<boolean>(false);
   
   // App state
-  const [loading, setLoading] = useState<boolean>(false); //Loading indicator
-  const [isCelsius, setIsCelsius] = useState<boolean>(true); //Temperature unit toggle (°C or °F)
+  const [loading, setLoading] = useState<boolean>(false);
+  const [isCelsius, setIsCelsius] = useState<boolean>(true);
 
   // Weather data state - current conditions
   const [currentWeather, setCurrentWeather] = useState<CurrentWeather>({
@@ -163,7 +176,7 @@ export default function WeatherApp() {
 
   //------> API INTEGRATION:
   
-  /**
+   /**
    * Geocodes a location name to coordinates using Open-Meteo Geocoding API
    * Returns formatted location object with lat/lon and display name
    */
@@ -179,7 +192,7 @@ export default function WeatherApp() {
         return {
           lat: result.latitude,
           lon: result.longitude,
-          name: `${result.name}${result.admin1 ?`, ${result.admin1}`: ''}, ${result.country}`
+          name: `${result.name}${result.admin1 ? `, ${result.admin1}` : ''}, ${result.country}`
         };
       }
       throw new Error('Location not found');
@@ -192,19 +205,25 @@ export default function WeatherApp() {
   /**
    * Fetches weather data from Open-Meteo API
    * Gets current weather, hourly forecast (12 hours), and daily forecast (5 days)
+   * UPDATED: Now also extracts and sets the city's timezone offset
    */
   const fetchWeatherData = async (lat: number, lon: number): Promise<void> => {
     try {
       setLoading(true);
       
-       // Comprehensive weather data request - current, hourly, and daily forecasts
+      // Comprehensive weather data request - current, hourly, and daily forecasts
       const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5&forecast_hours=12`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5&forecast_hours=12`
       );
       
       const data = await response.json();
       
-      //Process current weather data
+      // IMPORTANT: Extract and set the city's timezone offset from the API response
+      if (data.utc_offset_seconds !== undefined) {
+        setCityTimezoneOffset(data.utc_offset_seconds);
+      }
+      
+      // Process current weather data
       setCurrentWeather({
         temperature: Math.round(data.current.temperature_2m),
         condition: getWeatherCondition(data.current.weather_code),
@@ -213,7 +232,7 @@ export default function WeatherApp() {
         feelsLike: Math.round(data.current.apparent_temperature)
       });
 
-      //Process hourly forecast data (next 12 hours)
+      // Process hourly forecast data (next 12 hours)
       const hourlyData: HourlyForecastItem[] = data.hourly.time.slice(0, 12).map((time: string, index: number) => {
         const hour = new Date(time).getHours();
         return {
@@ -225,9 +244,8 @@ export default function WeatherApp() {
       });
       setHourlyForecast(hourlyData);
 
-       // Process daily forecast data (5 days)
+      // Process daily forecast data (5 days)
       const dailyData: DailyForecastItem[] = data.daily.time.map((date: string, index: number) => {
-        
         // Format day names - Today, Tomorrow, then weekday names
         const dayName = index === 0 ? 'Today' : 
                        index === 1 ? 'Tomorrow' : 
@@ -246,7 +264,7 @@ export default function WeatherApp() {
 
     } catch (error) {
       console.error('Error fetching weather data:', error);
-      //set fallback values when API fails
+      // Set fallback values when API fails
       setCurrentWeather({
         temperature: null,
         condition: 'Unable to load weather',
@@ -278,10 +296,9 @@ export default function WeatherApp() {
       const data = await response.json();
 
       if (data.results && data.results.length > 0) {
-
-         // Format suggestions with full location names
+        // Format suggestions with full location names
         setSuggestions(data.results.map((city: any) => ({
-          name: `${city.name}${city.admin1 ?`, ${city.admin1}`: ''}, ${city.country}`,
+          name: `${city.name}${city.admin1 ? `, ${city.admin1}` : ''}, ${city.country}`,
           lat: city.latitude,
           lon: city.longitude
         })));
@@ -299,13 +316,18 @@ export default function WeatherApp() {
 
   // SEARCH AND HISTORY HANDLERS
   
-  /**
+   /**
    * Handles selection of a city suggestion from the dropdown
    * Updates location, coordinates, and saves to search history
+   * UPDATED: Now triggers weather data fetch which will update timezone
    */
   const handleSuggestionSelect = async (item: LocationData): Promise<void> => {
     setLocation(item.name);
     setCoordinates({ lat: item.lat, lon: item.lon });
+    
+    // Fetch weather data for the new location (this will update the timezone)
+    await fetchWeatherData(item.lat, item.lon);
+    
     // Save complete location data to history (includes coordinates for faster access)
     await saveSearchToHistory({
       name: item.name,
@@ -313,7 +335,7 @@ export default function WeatherApp() {
       lon: item.lon
     });
 
-        // Clear search UI state
+    // Clear search UI state
     setSearchQuery('');
     setSuggestions([]);
     setIsSearchFocused(false);
@@ -323,6 +345,7 @@ export default function WeatherApp() {
   /**
    * Handles manual search submission (when user presses enter or search button)
    * Geocodes the search query and updates location
+   * UPDATED: Now triggers weather data fetch which will update timezone
    */
   const handleSearch = async (): Promise<void> => {
     if (searchQuery.trim()) {
@@ -332,6 +355,8 @@ export default function WeatherApp() {
         setLocation(locationData.name);
         setCoordinates({ lat: locationData.lat, lon: locationData.lon });
         
+        // Fetch weather data for the new location (this will update the timezone)
+        await fetchWeatherData(locationData.lat, locationData.lon);
 
         // Save complete location data to history
         await saveSearchToHistory({
@@ -339,6 +364,7 @@ export default function WeatherApp() {
           lat: locationData.lat,
           lon: locationData.lon
         });
+        
         // Clear search UI state
         setSearchQuery('');
         setSuggestions([]);
@@ -356,6 +382,7 @@ export default function WeatherApp() {
   /**
    * Handles selection from search history
    * Uses stored coordinates to avoid re-geocoding
+   * UPDATED: Now triggers weather data fetch which will update timezone
    */
   const handleHistorySelect = async (historyItem: LocationData): Promise<void> => {
     try {
@@ -365,11 +392,13 @@ export default function WeatherApp() {
       setLocation(historyItem.name);
       setCoordinates({ lat: historyItem.lat, lon: historyItem.lon });
       
+      // Fetch weather data for the selected location (this will update the timezone)
+      await fetchWeatherData(historyItem.lat, historyItem.lon);
 
       // Move selected item to top of history (most recently used)
       await saveSearchToHistory(historyItem);
       
-       // Clear search UI state
+      // Clear search UI state
       setSearchQuery('');
       setIsSearchFocused(false);
       setNoResults(false);
@@ -379,7 +408,6 @@ export default function WeatherApp() {
       setLoading(false);
     }
   };
-
   // ----> PERSISTENT STORAGE FUNCTIONS
   
   /**
