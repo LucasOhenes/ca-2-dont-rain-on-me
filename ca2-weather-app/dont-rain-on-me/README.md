@@ -1,4 +1,13 @@
-# Welcome to your Expo app 👋
+## REACT NATIVE WEATHER APP
+This weather app is a cross-platform mobile application that was created through React Native and allows users to search for the weather conditions based on their locations.
+
+## FEATURES
+- Search weather by city name
+- A search history that saves up to 5 searches between sessions.
+- A toggle to change from Celsius to Fahrenheit
+- Day and Night Modes (depending on what time it is, it changes colour and it follows around the world, e.g if you reseaerch a city that it is nighttime the layout gets dark)
+- 5 day forecast with visual representation and daily highs and lows. 
+
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
@@ -23,28 +32,24 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
+## COMPONENT OVERVIEW
 
-When you're ready, run:
+- layout.tsx - Import the expo-router
 
-```bash
-npm run reset-project
-```
+- index.tsx - Home screen configuration
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- weather-app.tsx - General Functionalities
 
-## Learn more
+## API INTEGRATION
+- Service : openmeteo
 
-To learn more about developing your project with Expo, look at the following resources:
+## TESTING
+- Unit and component test explained in TESTING.md
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## CONTRIBUTORS
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Renan de Castilhos da Silva
+- Ueslei Deiveson Monteiro de Oliveira
+- Wanderson Lucas Ohenes
