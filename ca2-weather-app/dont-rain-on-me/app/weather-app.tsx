@@ -56,7 +56,7 @@ export default function WeatherApp() {
   // Add timezone offset state to track the selected city's UTC offset
   const [cityTimezoneOffset, setCityTimezoneOffset] = useState<number>(0); // in seconds
   
-  // Calculate day/night based on the selected city's time instead of local time
+  // Calculate day/night based on the selected city's time
   const getCityTime = () => {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000); // Convert to UTC
