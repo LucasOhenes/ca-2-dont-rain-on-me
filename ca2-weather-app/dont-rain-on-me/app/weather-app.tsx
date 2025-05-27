@@ -77,15 +77,15 @@ export default function WeatherApp() {
   const [coordinates, setCoordinates] = useState<Coordinates>({ lat: 53.33306, lon: -6.24889});
   
   // Search functionality state
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchHistory, setSearchHistory] = useState<LocationData[]>([]);
-  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
-  const [suggestions, setSuggestions] = useState<LocationData[]>([]);
-  const [noResults, setNoResults] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');  // current search input
+  const [searchHistory, setSearchHistory] = useState<LocationData[]>([]); //stored search history from AsyncStorage
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);  //controls when to show history/suggestions
+  const [suggestions, setSuggestions] = useState<LocationData[]>([]); //Live city suggestions from geocoding API
+  const [noResults, setNoResults] = useState<boolean>(false); //shows "no results" message
   
   // App state
-  const [loading, setLoading] = useState<boolean>(false);
-  const [isCelsius, setIsCelsius] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);   //Loading indicator
+  const [isCelsius, setIsCelsius] = useState<boolean>(true);  //Temperature unit toggle (°C or °F)
 
   // Weather data state - current conditions
   const [currentWeather, setCurrentWeather] = useState<CurrentWeather>({
