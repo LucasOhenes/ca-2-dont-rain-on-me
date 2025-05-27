@@ -46,7 +46,7 @@ This project uses [file-based routing](https://docs.expo.dev/router/introduction
 - Service : openmeteo
 
 ## TESTING
-- Unit and component test explained in TESTING.md
+- Unit and component test explained in test.md
 
 ## CONTRIBUTORS
 
